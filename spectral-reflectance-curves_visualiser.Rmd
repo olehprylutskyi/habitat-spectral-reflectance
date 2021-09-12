@@ -1,0 +1,466 @@
+---
+title: "Spectral reflectance curves of natural habitats of Southern Bug river valley, Ukraine"
+author: "Oleh Prylutskyi"
+date: "9/05/2021"
+output: html_document
+---
+Reset R`s brain
+
+```{r}
+rm(list = ls())
+```
+
+# Load required packages and data
+Load packages
+
+```{r}
+library(plyr)# order matters! Firstly plyr, followed by dplyr!
+library(dplyr)
+library(tidyr)
+library(raster)
+library(sf)
+library(sp)
+library(rgdal)
+library(exactextractr)
+library(ggplot2)
+library(mgcv) # for geom_smooth by method = gam
+library(Hmisc) # for stat_summary
+```
+
+We use several time spans which represent different phenological stages, as following
+[Day of the year calendar](https://people.biology.ucsd.edu/patrick/julian_cal.html)
+Be careful with leap years!
+
+## Vegetative periods
+measured in day of year
+
+105-135 - (15 Apr - 15 May) 
+135-166 - (15 May - 15 Jun)
+166-196 - (15 Jun - 15 Jul)
+196-227 - (15 Jul - 15 Aug)
+227-258 - (15 Aug - 15 Sep)
+258-288 - (15 Sep - 15 Oct)
+
+## leaf-less preriods
+
+288-319 - (15 Oct - 15 Nov)
+074-105 - (15 Mar - 15 Apr)
+
+Set timespan names. For each timespan the code should be run separately.
+
+```{r}
+year = 2019
+timespan = "_15May-15Jun"
+time_span = "135_166"
+```
+
+Load shapefile with ground truth data (as polygons with known habitat type) and check number of polygons for each habitat types
+
+```{r}
+shp <- shapefile("training_polygons_shapefile.shp")
+summary(factor(shp@data$eunis_2020)) # number of training polygons
+```
+
+```{r}
+Classes = cbind(levels(factor(shp@data$eunis_2020)),c(1:26))
+colnames(Classes) = c("eunis_2020", "ClassInt")
+Classes = as.data.frame(Classes)
+Classes$ClassInt = as.numeric(Classes$ClassInt)
+shp = merge(shp, Classes, by.x = "eunis_2020")
+```
+
+Set the satellite imagery name
+
+```{r}
+imageryname = paste0("SBuh_S2_full_",year, "_", time_span)
+```
+Define imagery to process
+Load the raster file
+
+```{r}
+filename = paste0(imageryname,".tif")
+ImageStack <- brick(filename)
+ImageStack # View imagery structure and features
+```
+
+Extract optical data from satellite imagery for each pixels within training polygons and convert it to the dataframe
+
+```{r}
+dfAll <- data.frame(matrix(vector(), nrow = 0, ncol = length(names(ImageStack)) + 1))
+for (i in 1:length(base::unique(shp[["ClassInt"]]))){
+  category <- base::unique(shp[["ClassInt"]])[i]
+  categorymap <- shp[shp[["ClassInt"]] == category,]
+  beginCluster()
+  dataSet <- exact_extract(ImageStack, categorymap)
+  endCluster()
+  dataSet <- dataSet[!unlist(lapply(dataSet, is.null))]
+  dataSet <- lapply(dataSet, function(x){cbind(x, ClassInt = as.numeric(rep(category, nrow(x))))})
+  df <- do.call("rbind", dataSet)
+  dfAll <- rbind(dfAll, df)
+}
+```
+
+Add classes' names to resulting dataframe and it for further sessions.
+
+```{r}
+reflectance = dfAll %>%
+  left_join(Classes)
+save(reflectance, file = imageryname)
+```
+
+# Make spectral reflectance curve for single imagery
+
+## Quantitative overview of pixel data
+
+```{r}
+summary(factor(reflectance$eunis_2020))
+```
+
+Number of spectral values for different habitat types
+
+```{r}
+ggplot(reflectance, aes(x=eunis_2020))+
+  geom_bar()+
+  theme_minimal()
+```
+
+Define which habitat types will be excluded, such as small habitats lacking of pixel data.
+
+```{r}
+excluded = c("V34", "Q53", "S91") # manualy define habitats with less than 50 values
+```
+
+## Prepare pixel data to the ready-to-visualize mode
+
+Create "dummy" wavelength object, containing mean wavelengths (nm) for Sentinel 2A (https://en.wikipedia.org/wiki/Sentinel-2), for bands 2-12
+
+```{r}
+dummy_wavelength = c(492.4, 559.8, 664.6, 704.1, 740.5, 782.8, 832.8, 864.7, 1613.7, 2202.4)
+bands = c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12")
+waves = cbind(bands, dummy_wavelength)
+colnames(waves)[1] = "variable"
+```
+
+For Sentinel-2 L2A optical data, generated through Google Earth Engine, the relation between DN and REFLECTANCE (default unit) is: DN = 10000 * REFLECTANCE. [documentation](https://docs.sentinel-hub.com/api/latest/data/sentinel-2-l2a/). So, to obtain unified reflectance data, we need to divide pixel values to 10,000.
+
+Separate EUNIS habitat types of high hierarchical level
+
+```{r}
+EUNIS = substring(Classes$eunis_2020, 1, 1) # split first character from strings
+Classes_2l = cbind(Classes, EUNIS)
+```
+
+Obtaining true reflectance values and add
+
+```{r}
+df = reflectance %>% dplyr::select(-eunis_2020, -NDVI) %>%
+  mutate_at(vars(B2: B12), funs(./ 10000)) %>% # obtain true reflectance values
+  left_join(Classes_2l) %>% # Add EUNIS classification systems on 2 levels
+  filter(!(eunis_2020 %in% excluded)) # drop enormous habitat types
+```
+
+Quantitative overview of resulting pixel data for both hierarchical level
+
+```{r For higher hierarchical level}
+summary(factor(df$EUNIS))
+```
+
+```{r For lower hierarchical level}
+summary(factor(df$eunis_2020))
+```
+
+Reshape the dataframe to make it appropriate to ggplot2 syntax
+
+```{r}
+df1 = tibble::as_tibble(df) %>%
+  reshape2::melt(id = "eunis_2020") %>%
+  left_join(as.data.frame(waves)) %>%
+  left_join(Classes_2l) %>%
+  mutate(across(eunis_2020, as.factor)) %>%
+  mutate(across(dummy_wavelength, as.numeric)) %>%
+  mutate(across(variable, as.factor)) %>%
+  mutate(across(value, as.numeric)) %>%
+  mutate(across(EUNIS, as.factor)) %>%
+  mutate(variable = factor(variable, 
+                       levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12"))) %>%
+  na.omit()
+```
+
+Spectral reflectance curves for all habitat types
+
+```{r}
+filnm = paste0("SRC_all_habitats_",as.character(year),timespan,".png")
+png(filnm, width = 200,
+      height = 170, units = "mm", res = 150)
+ggplot(df1, aes(x=dummy_wavelength, y= value, colour = eunis_2020))+
+  geom_smooth(aes(fill = EUNIS))+
+  ylim(0, 0.5)+
+  labs(x='Wavelength, nm', y='Reflectance',
+       title=paste0("Spectral reflectance curves for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+```
+
+Within different types on higher hierarchical level (R, J, etc.)
+
+```{r}
+filnm = paste0("SRC_all_habitats_facet_",as.character(year),timespan,".png")
+png(filnm, width = 200,
+      height = 150, units = "mm", res = 150)
+ggplot(df1, aes(x=dummy_wavelength, y= value, colour = eunis_2020))+
+  geom_smooth()+
+  ylim(0, 0.5)+
+  labs(x='Wavelength, nm', y='Reflectance',
+       title=paste0("Spectral reflectance curves for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  facet_wrap(~ EUNIS)+
+  theme_minimal()
+dev.off()
+```
+
+Transform the data to acquire statistical summaries (mean, mean-standard deviation, mean+standard deviation) for each group of variables
+
+```{r}
+# Summarize
+df3 = df1 %>%
+  drop_na() %>%
+  dplyr::select(-ClassInt) %>%
+  mutate(across(variable, as.factor)) %>%
+  mutate(across(value, as.numeric)) %>%
+  mutate(across(EUNIS, as.factor)) %>%
+  group_by(variable, EUNIS, eunis_2020) %>% 
+  summarise(mean_refl = mean(value), min_refl = mean(value)-sd(value), max_refl = mean(value)+sd(value)) %>%
+  left_join(as.data.frame(waves)) %>%
+  mutate(across(dummy_wavelength, as.numeric)) %>%
+  rename(band = variable, wavelength = dummy_wavelength) %>%
+  mutate(band = factor(band, 
+                       levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12")))
+```
+
+
+Reflectance ber bands on high classification level
+
+```{r}
+filnm = paste0("Reflectance_per_bands_EUNIS_",as.character(year),timespan,".png")
+png(filnm, width = 200,
+      height = 150, units = "mm", res = 150)
+ggplot(df3, aes(x=band, y=mean_refl, colour = EUNIS))+
+  geom_line(aes(group = eunis_2020))+
+  geom_pointrange(aes(ymin = min_refl, ymax = max_refl), width = 0.2)+
+  ylim(0, 0.6)+
+  labs(x='Sentinel-2 bands', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+```
+
+Reflectance per bands within different groups of habitat types
+
+```{r}
+filnm = paste0("Reflectance_per_bands_EUNIS_facet_",as.character(year),timespan,".png")
+png(filnm, width = 200,
+      height = 150, units = "mm", res = 150)
+ggplot(df3, aes(x=band, y=mean_refl, colour = eunis_2020))+
+  geom_line(aes(group = eunis_2020))+
+  geom_pointrange(aes(ymin = min_refl, ymax = max_refl), width = 0.2)+
+  ylim(0, 0.6)+
+  labs(x='Sentinel-2 bands', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  facet_wrap(~ EUNIS)+
+  theme_minimal()
+dev.off()
+```
+
+# Differences between habitat types per channel
+For 1st hierarchical level (EUNIS)
+
+```{r}
+png("Violin_all_variables_EUNIS.png", width = 250,
+      height = 210, units = "mm", res = 150)
+ggplot(df1, aes(x=EUNIS, y= value, fill = EUNIS))+
+  geom_violin(trim = FALSE)+
+  facet_wrap( ~ variable, ncol = 2)+
+  ylim(0, 0.6)+
+  labs(x='Habitat type',y='Reflectance',
+       fill="EUNIS",
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+```
+
+For lower hierarchical level (eunis_2020)
+
+```{r}
+png("Violin_all_variables_eunis_2020.png", width = 300,
+      height = 450, units = "mm", res = 150)
+ggplot(df1, aes(x=eunis_2020, y= value, fill = eunis_2020))+
+  geom_violin(trim = FALSE)+
+  facet_wrap( ~ variable, ncol = 1)+
+  ylim(0., 0.6)+
+  labs(x='Habitat type',y='Reflectance',
+       fill="eunis_2020",
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+```
+
+# Reflectance within particular hirher level (R, S, etc.)
+
+```{r}
+#habtype = "C" # Uncomment desired, leave commented others
+#habtype = "J"
+#habtype = "Q"
+habtype = "R"
+#habtype = "S"
+#habtype = "T"
+#habtype = "U"
+#habtype = "V"
+#habtype = "X"
+
+# As violin plots
+filnm = paste0("Violins_",habtype,"_",as.character(year),timespan,".png")
+png(filnm, width = 200,
+      height = 150, units = "mm", res = 150)
+df1 %>%
+  filter(EUNIS == habtype) %>%
+  ggplot(aes(x=eunis_2020, y= value, fill = eunis_2020))+
+  geom_violin(trim = FALSE)+
+  facet_wrap( ~ variable, ncol = 3)+
+  labs(x='Habitat type',y='Reflectance',
+       fill="eunis_2020",
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+
+# As Spectral reflectance curves
+filnm = paste0("SRC_",habtype,"_",as.character(year),timespan,".png")
+png(filnm, width = 160,
+      height = 120, units = "mm", res = 150)
+df1 %>%
+  filter(EUNIS == habtype) %>%
+  ggplot(aes(x=dummy_wavelength, y= value, colour = eunis_2020))+
+  geom_smooth()+
+  ylim(0, 0.5)+
+  labs(x='Wavelength, nm', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+
+# As reflectance per bands
+filnm = paste0("Reflectance_per_bands_",habtype,"_",as.character(year),timespan,".png")
+png(filnm, width = 160,
+      height = 120, units = "mm", res = 150)
+df3 %>%
+  filter(EUNIS == habtype) %>%
+  ggplot(aes(x=band, y=mean_refl, colour = eunis_2020))+
+  geom_line(aes(group = eunis_2020))+
+  ylim(0,0.6)+
+  geom_pointrange(aes(ymin = min_refl, ymax = max_refl, alpha = 0.2), width = 0.2)+
+  labs(x='Sentinel-2 bands', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+```
+
+# Comparison for some closelly related groups of habitat types
+## Wooded speppe - tue steppe
+
+- R1B - Steppe (dry grassland)
+- S36 - Low steppic scrub
+- S35 - Temperate thorn scrub
+- X18 - Wooded steppe
+- T19 - Termophilous forest
+- Q51 - Tall-helophyte bed
+- R21 - Mesic lowland pasture
+- T11 - Riparian forest
+- R12 - Cryptogam- and annual-dominated vegetation on siliceous rock outcrops
+- U33 - Temperate siliceous inland cliff
+
+Set habitat_set variable (above) - uncomment desired or add yours
+
+```{r}
+habitat_set = c("S35","S36","R1B","X18","T19")
+#habitat_set = c("Q51","T11","R21")
+#habitat_set = c("U33","R12","R1B")
+
+habset = paste(habitat_set, collapse = "_") # convert vector to string
+
+# Statistical summary for reflectance for selected habitat types
+filnm = paste0("Reflectance_within_bands_",habset,"_",as.character(year),timespan,".png")
+png(filnm, width = 160,
+      height = 120, units = "mm", res = 150)
+df3 %>%
+  filter(eunis_2020 %in% habitat_set) %>% # set criteria for subsetting
+  ggplot(aes(x=band, y=mean_refl, colour = eunis_2020))+
+  geom_line(aes(group = eunis_2020))+
+  geom_pointrange(aes(ymin = min_refl, ymax = max_refl, alpha = 0.2), width = 0.2)+
+  ylim(0, 0.6)+
+  labs(x='Sentinel-2 bands', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+
+# Spectral reflectance curves for selected habitat types
+filnm = paste0("SRC_within_bands_",habset,"_",as.character(year),timespan,".png")
+png(filnm, width = 160,
+      height = 120, units = "mm", res = 150)
+df1 %>%
+  filter(eunis_2020 %in% habitat_set) %>% # set criteria for subsetting
+  ggplot(aes(x=dummy_wavelength, y= value, colour = eunis_2020))+
+  geom_smooth()+
+  ylim(0, 0.5)+
+  labs(x='Wavelength, nm', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+
+# Violin plots of reflectance value density for selected habitat types
+filnm = paste0("Violins_within_bands_",habset,"_",as.character(year),timespan,".png")
+png(filnm, width = 200,
+      height = 120, units = "mm", res = 150)
+df1 %>%
+  filter(eunis_2020 %in% habitat_set) %>%
+  ggplot(aes(x=variable, y=value, fill=eunis_2020))+
+  geom_violin(trim = FALSE)+
+  labs(x='Sentinel-2 bands', y='Reflectance',
+       title=paste0("Reflectance for different habitat types ",year,timespan),
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+dev.off()
+```
+
+# Save transformed reflectance data for further analysis
+
+```{r}
+dataframename = "df1"
+dataname = paste0(dataframename,"_",imageryname)
+save(df1, file = dataname)
+dataframename = "df3"
+dataname = paste0(dataframename,"_",imageryname)
+save(df3, file = dataname)
+```
+
+# Obtain NDVI values
+
+```{r}
+df = reflectance %>% dplyr::select(eunis_2020, NDVI) %>%
+  mutate(NDVI = NDVI/1000) %>% # obtain true reflectance values
+  left_join(Classes_2l) %>% # Add EUNIS classification systems on 2 levels
+  filter(!(eunis_2020 %in% excluded)) %>% # drop enormous habitat types
+  dplyr::select(-ClassInt) %>%
+  mutate(Year = year) %>%
+  mutate(across(Year, as.factor)) %>%
+  mutate(across(EUNIS, as.factor)) %>%
+  mutate(across(eunis_2020, as.factor))
+save(df, file = paste0("NDVI_",year,"_",time_span))
+```
