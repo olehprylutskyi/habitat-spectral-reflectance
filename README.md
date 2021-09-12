@@ -23,6 +23,3 @@ RMarkdown is used for obtain pixel reflectance data for user-defined ground trut
 
 # Knowing issues
 1. Timespan selected manually, though better using loops.
-
-# Warnings
-Satellite imagery is large to download (427 MB)!
