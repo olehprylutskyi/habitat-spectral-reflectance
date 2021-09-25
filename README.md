@@ -13,7 +13,7 @@ RMarkdown is used for obtain pixel reflectance data for user-defined ground trut
 - R 4.0 or higher
 - RStudio IDE
 
-# Outputs
+## Outputs
 - 10-meter in resolution medianized satellite imagery
 - R-objects with the raw pixel data for furter analysis
 - Spectral reflectance curves for user-defined set of habitat types
@@ -21,5 +21,13 @@ RMarkdown is used for obtain pixel reflectance data for user-defined ground trut
 - Density of values (as violin plots) for selected habitat types per band
 - NDVI as pixel data for selected period
 
-# Knowing issues
+## Output examples
+![]()
+![]()
+![]()
+
+## Knowing issues
 1. Timespan selected manually, though better using loops.
+
+## References
+Shyriaieva, D., Prylutskyi, O. (2021). Exploratory analysis of the spectral reflectance curves of habitat types: a case study on Southern Bug River valley, Ukraine. In: 63rd IAVS Annual Symposium: Book of Abstracts, p. 153.
