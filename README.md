@@ -22,12 +22,12 @@ RMarkdown is used for obtain pixel reflectance data for user-defined ground trut
 - NDVI as pixel data for selected period
 
 ## Output examples
-![]()
-![]()
-![]()
+![Spectral reflectance curves for user-defined set of habitat types](https://github.com/olehprylutskyi/habitat-spectral-reflectance/blob/main/SRC_within_bands_S35_S36_R1B_X18_T19_2019_15May-15Jun.png)
+![Reflectance per bands for user-defined set of habitat types](https://github.com/olehprylutskyi/habitat-spectral-reflectance/blob/main/Reflectance_within_bands_S35_S36_R1B_X18_T19_2019_15May-15Jun.png)
+![Density of values (as violin plots) for selected habitat types per band](https://github.com/olehprylutskyi/habitat-spectral-reflectance/blob/main/Violins_R_2019_15May-15Jun.png)
 
-## Knowing issues
-1. Timespan selected manually, though better using loops.
+## Known issues
+1. Timespan selected manually, though using loops would be better.
 
 ## References
 Shyriaieva, D., Prylutskyi, O. (2021). Exploratory analysis of the spectral reflectance curves of habitat types: a case study on Southern Bug River valley, Ukraine. In: 63rd IAVS Annual Symposium: Book of Abstracts, p. 153.
