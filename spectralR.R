@@ -322,7 +322,7 @@ save(reflectance, file = "reflectance_data") # save pixel data for further sessi
 #### Making spectral reflectance curves ####
 
 # Quantitative overview of pixel data
-#load(file = "./reflectance_data") # restore prevoiusly saved pixel data
+load(file = "./reflectance_data") # restore prevoiusly saved pixel data
 
 summary(factor(reflectance$label)) # how many pixels in each class? 
 
@@ -339,83 +339,161 @@ ggplot(reflectance, aes(x=label))+
 
 ## Prepare pixel data to the ready-to-visualize mode
 
-# Create "dummy" wavelength object, containing mean wavelengths (nm) for Sentinel 2A 
-# (https://en.wikipedia.org/wiki/Sentinel-2), for bands 2-12
+# Function takes reflectance data as an input and retrieve ggplot object, which can be 
+# visualized directly or customized using ggplot functionality. Default aesthetic is 
+# smoother curve (geom_smooth), method - gam. See https://ggplot2.tidyverse.org/reference/geom_smooth.html 
+# for more details.
 
-dummy_wavelength <-  c(492.4, 559.8, 664.6, 704.1, 740.5, 782.8, 832.8, 864.7, 1613.7, 2202.4)
-bands <-  c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12")
-waves <-  cbind(bands, dummy_wavelength)
-colnames(waves)[1] <-  "variable"
-
-
-# Reshape the dataframe to make it appropriate to ggplot2 syntax
-df1 <- tibble::as_tibble(reflectance) %>%
-  reshape2::melt(id = "label") %>%
-  left_join(as.data.frame(waves)) %>%
-  mutate(across(label, as.factor)) %>%
-  mutate(across(dummy_wavelength, as.numeric)) %>%
-  mutate(across(variable, as.factor)) %>%
-  mutate(across(value, as.numeric)) %>%
-  mutate(variable = factor(variable, 
-                           levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12"))) %>%
-  na.omit()
+# Specify:
+# - reflectance data as dataframe with pixel values for Sentinel optical bands
+# B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12;
 
 
-# Spectral reflectance curves for all habitat types
-#png("SRC_all_classes.png", width = 200,
-#    height = 170, units = "mm", res = 150)
-ggplot(df1, aes(x=dummy_wavelength, y= value, colour = label))+
-  geom_smooth(aes(fill = label))+
+spectral.curves.plot <- function(data){
+  # Create "dummy" wavelength object, containing mean wavelengths (nm) for Sentinel 2A 
+  # (https://en.wikipedia.org/wiki/Sentinel-2), for bands 2-12
+  
+  dummy_wavelength <-  c(492.4, 559.8, 664.6, 704.1, 740.5, 782.8, 832.8, 864.7, 1613.7, 2202.4)
+  bands <-  c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12")
+  waves <-  cbind(bands, dummy_wavelength)
+  colnames(waves)[1] <-  "variable"
+
+  # Reshape the dataframe to make it appropriate to ggplot2 syntax
+  p <- tibble::as_tibble(data) %>%
+    reshape2::melt(id = "label") %>%
+    left_join(as.data.frame(waves)) %>%
+    mutate(across(label, as.factor)) %>%
+    mutate(across(dummy_wavelength, as.numeric)) %>%
+    mutate(across(variable, as.factor)) %>%
+    mutate(across(value, as.numeric)) %>%
+    mutate(variable = factor(variable, 
+                             levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12"))) %>%
+    na.omit() %>%
+    ggplot(aes(x=dummy_wavelength, y= value, colour = label))+
+    geom_smooth(aes(fill = label))
+}
+
+p1 <- spectral.curves.plot(reflectance)
+
+p1
+
+p1+
   labs(x = 'Wavelength, nm', y = 'Reflectance',
        colour = "Surface classes",
        fill = "Surface classes",
        title = "Spectral reflectance curves for different classes of surface",
        caption = 'Data: Sentinel-2 Level-2A')+
   theme_minimal()
-#dev.off()
+
 
 # Transform the data to acquire statistical summaries (mean, mean-standard deviation, 
 # mean+standard deviation) for each group of variables
-# Summarize
-df2 <-  df1 %>%
-  drop_na() %>%
-  mutate(across(variable, as.factor)) %>%
-  mutate(across(value, as.numeric)) %>%
-  group_by(variable, label) %>% 
-  summarise(mean_refl = mean(value), min_refl = mean(value)-sd(value), max_refl = mean(value)+sd(value)) %>%
-  left_join(as.data.frame(waves)) %>%
-  mutate(across(dummy_wavelength, as.numeric)) %>%
-  rename(band = variable, wavelength = dummy_wavelength) %>%
-  mutate(band = factor(band, 
-                       levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12")))
+
+# Function takes reflectance data as an input and retrieve ggplot object, which can be 
+# visualized directly or customized using ggplot functionality. Default aesthetics are 
+# line with statistical summary for each satellite band (geom_line + geom_pointrange),
+# See https://ggplot2.tidyverse.org/reference/geom_linerange.html 
+# https://ggplot2.tidyverse.org/reference/geom_path.html for more details.
+
+# Specify:
+# - reflectance data as dataframe with pixel values for Sentinel optical bands
+# B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12;
 
 
+stat.summary.plot <- function(data){
+  # Create "dummy" wavelength object, containing mean wavelengths (nm) for Sentinel 2A 
+  # (https://en.wikipedia.org/wiki/Sentinel-2), for bands 2-12
+  
+  dummy_wavelength <-  c(492.4, 559.8, 664.6, 704.1, 740.5, 782.8, 832.8, 864.7, 1613.7, 2202.4)
+  bands <-  c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12")
+  waves <-  cbind(bands, dummy_wavelength)
+  colnames(waves)[1] <-  "variable"
+  
+  # Reshape the dataframe to make it appropriate to ggplot2 syntax
+  p <- tibble::as_tibble(data) %>%
+    reshape2::melt(id = "label") %>%
+    left_join(as.data.frame(waves)) %>%
+    mutate(across(label, as.factor)) %>%
+    mutate(across(dummy_wavelength, as.numeric)) %>%
+    mutate(across(variable, as.factor)) %>%
+    mutate(across(value, as.numeric)) %>%
+    mutate(variable = factor(variable, 
+                             levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12"))) %>%
+    na.omit() %>%
+    drop_na() %>%
+    mutate(across(variable, as.factor)) %>%
+    mutate(across(value, as.numeric)) %>%
+    group_by(variable, label) %>% 
+    summarise(mean_refl = mean(value), min_refl = mean(value)-sd(value), max_refl = mean(value)+sd(value)) %>%
+    left_join(as.data.frame(waves)) %>%
+    mutate(across(dummy_wavelength, as.numeric)) %>%
+    rename(band = variable, wavelength = dummy_wavelength) %>%
+    mutate(band = factor(band, 
+                         levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12"))) %>%
+    ggplot(aes(x=band, y=mean_refl, colour = label))+
+    geom_line(aes(group = label))+
+    geom_pointrange(aes(ymin = min_refl, ymax = max_refl), width = 0.2)
+}
 
-# Reflectance ber bands on high classification level
-# png("Reflectance_per_bands.png", width = 200,
-#    height = 150, units = "mm", res = 150)
-ggplot(df2, aes(x=band, y=mean_refl, colour = label))+
-  geom_line(aes(group = label))+
-  geom_pointrange(aes(ymin = min_refl, ymax = max_refl), width = 0.2)+
+
+p2 <- stat.summary.plot(reflectance)
+
+p2
+
+p2 + 
   labs(x = 'Sentinel-2 bands', y = 'Reflectance',
        colour = "Surface classes",
        title = "Reflectance for different surface classes",
        caption='Data: Sentinel-2 Level-2A\nmean ± standard deviation')+
   theme_minimal()
-# dev.off()
 
 
-# Differences between habitat types per channel
-#png("Violin_all_variables_EUNIS.png", width = 250,
-#    height = 210, units = "mm", res = 150)
-ggplot(df1, aes(x=label, y= value, fill = label))+
-  geom_violin(trim = FALSE)+
-  facet_wrap( ~ variable, ncol = 2)+
+# Reflectance per bands on high classification level
+
+# Function takes reflectance data as an input and retrieve ggplot object, which can be 
+# visualized directly or customized using ggplot functionality. Default aesthetics is 
+# violin plot for each satellite band (geom_violin),
+# See https://ggplot2.tidyverse.org/reference/geom_violin.html for more details.
+
+# Specify:
+# - reflectance data as dataframe with pixel values for Sentinel optical bands
+# B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12;
+
+
+violin.plot <- function(data){
+  # Create "dummy" wavelength object, containing mean wavelengths (nm) for Sentinel 2A 
+  # (https://en.wikipedia.org/wiki/Sentinel-2), for bands 2-12
+  
+  dummy_wavelength <-  c(492.4, 559.8, 664.6, 704.1, 740.5, 782.8, 832.8, 864.7, 1613.7, 2202.4)
+  bands <-  c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12")
+  waves <-  cbind(bands, dummy_wavelength)
+  colnames(waves)[1] <-  "variable"
+  
+  # Reshape the dataframe to make it appropriate to ggplot2 syntax
+  p <- tibble::as_tibble(data) %>%
+    reshape2::melt(id = "label") %>%
+    left_join(as.data.frame(waves)) %>%
+    mutate(across(label, as.factor)) %>%
+    mutate(across(dummy_wavelength, as.numeric)) %>%
+    mutate(across(variable, as.factor)) %>%
+    mutate(across(value, as.numeric)) %>%
+    mutate(variable = factor(variable, 
+                             levels = c("B2","B3","B4","B5","B6","B7","B8","B8A","B11","B12"))) %>%
+    na.omit() %>%
+    ggplot(aes(x=label, y= value, fill = label))+
+    geom_violin(trim = FALSE)+
+    facet_wrap( ~ variable, ncol = 2)
+}
+
+p3 <- violin.plot(reflectance)
+
+p3
+
+p3 + 
   labs(x='Surface class',y='Reflectance',
        fill="Surface classes",
        title = "Reflectance for different surface classes",
        caption='Data: Sentinel-2 Level-2A')+
   theme_minimal()
-#dev.off()
 
 #### The end ####
