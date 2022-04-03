@@ -1,0 +1,138 @@
+Error in ee_connect_to_py(path = ee_current_version, n = 5) :
+  The current Python PATH: /home/oleh/.virtualenvs/rgee/bin/python
+does not have the Python package "earthengine-api" installed. Are you restarted/terminated.
+your R session after install miniconda or run ee_install()?
+If no do it, please try again:
+> ee_install(): To create and set a Python environment with all rgee dependencies.
+> ee_install_set_pyenv(): To set a specific Python environment.
+
+ee_install()
+
+
+
+R version 4.1.3 (2022-03-10) -- "One Push-Up"
+Copyright (C) 2022 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # Reset R's brain before new analysis session started
+> rm(list = ls())
+> # Load required packages
+> library(tidyverse)
+── Attaching packages ──────────────────────────────────────────────────────────────────────────── tidyverse 1.3.1 ──
+✓ ggplot2 3.3.5     ✓ purrr   0.3.4
+✓ tibble  3.1.6     ✓ dplyr   1.0.8
+✓ tidyr   1.2.0     ✓ stringr 1.4.0
+✓ readr   2.1.2     ✓ forcats 0.5.1
+── Conflicts ─────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+x dplyr::filter() masks stats::filter()
+x dplyr::lag()    masks stats::lag()
+> library(rgee)
+> library(sf)
+Linking to GEOS 3.9.0, GDAL 3.2.2, PROJ 7.2.1; sf_use_s2() is TRUE
+> library(geojsonio)
+Registered S3 method overwritten by 'geojsonsf':
+  method        from
+  print.geojson geojson
+
+Attaching package: ‘geojsonio’
+
+The following object is masked from ‘package:base’:
+
+    pretty
+
+Warning message:
+In fun(libname, pkgname) :
+  rgeos: versions of GEOS runtime 3.9.0-CAPI-1.16.2
+and GEOS at installation 3.8.0-CAPI-1.13.1differ
+> library(reshape2)
+
+Attaching package: ‘reshape2’
+
+The following object is masked from ‘package:tidyr’:
+
+    smiths
+
+
+> # Upload and process vector data
+> sf_df <- prepare.vector.data("training_polygons_shapefile.shp", "eunis_2020")
+> # Initialize Google Earth Engine API for current session
+> ee_Initialize()
+Error in ee_connect_to_py(path = ee_current_version, n = 5) :
+  The current Python PATH: /home/oleh/.virtualenvs/rgee/bin/python
+does not have the Python package "earthengine-api" installed. Are you restarted/terminated.
+your R session after install miniconda or run ee_install()?
+If no do it, please try again:
+> ee_install(): To create and set a Python environment with all rgee dependencies.
+> ee_install_set_pyenv(): To set a specific Python environment.
+> ## It is necessary just once to complete installation necessary dependencies
+> ee_install()
+───────────────────────────────────────────────────────────────────────── Python configuration used to create rgee ──
+python:         /home/oleh/.local/share/r-miniconda/envs/r-reticulate/bin/python
+libpython:      /home/oleh/.local/share/r-miniconda/envs/r-reticulate/lib/libpython3.8.so
+pythonhome:     /home/oleh/.local/share/r-miniconda/envs/r-reticulate:/home/oleh/.local/share/r-miniconda/envs/r-reticulate
+version:        3.8.12 | packaged by conda-forge | (default, Jan 30 2022, 23:53:36)  [GCC 9.4.0]
+numpy:          /home/oleh/.local/share/r-miniconda/envs/r-reticulate/lib/python3.8/site-packages/numpy
+numpy_version:  1.22.3
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+1. Removing the previous Python Environment (rgee), if it exists ...
+Virtual environment 'rgee' removed.
+
+2. Creating a Python Environment (rgee)
+Error in value[[3L]](cond) :
+  An error occur when ee_install was creating the Python Environment. Run ee_clean_pyenv() and restart the R session, before trying again.
+
+
+ee_clean_pyenv()
+
+Restarting R session...
+
+library(rgee) # because libraries have been detached after session Restarting
+
+ee_install()
+
+
+
+1. Removing the previous Python Environment (rgee), if it exists ...
+rgee not found
+
+
+2. Creating a Python Environment (rgee)
+Using Python: /home/oleh/.local/share/r-miniconda/envs/r-reticulate/bin/python3.8
+Creating virtual environment 'rgee' ... Done!
+
+rgee::ee_install want to store the environment variables: EARTHENGINE_PYTHON
+and EARTHENGINE_ENV in your .Renviron file to use the Python path:
+/home/oleh/.virtualenvs/rgee/bin/python in future sessions.
+Would you like to continues? [Y/n]:y
+
+3. The Environment Variables: 'EARTHENGINE_PYTHON=/home/oleh/.virtualenvs/rgee/bin/python' and 'EARTHENGINE_ENV=rgee'
+were saved in the .Renviron (/home/oleh/.Renviron) file. Remember that you
+could remove EARTHENGINE_PYTHON and EARTHENGINE_ENV using rgee::ee_clean_pyenv().
+
+4. Installing the earthengine-api. Running:
+reticulate::py_install(packages = 'earthengine-api', envname = '~/.virtualenvs/rgee')
+
+
+
+
+Well done! rgee was successfully set up in your system.
+You need restart R to see changes. After doing that, we recommend
+run ee_check() to perform a full check of all non-R rgee dependencies.
+Do you want restart your R session?
+
+1: yes
+2: no
