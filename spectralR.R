@@ -61,6 +61,8 @@ ee_Initialize()
 # API with your GEE username in console, - congratulations, you managed to install 
 # and configure rgee!
 
+#### Use case 1. Basic habitat types of 'Homilsha Forests' National Park neighborhood. ####
+
 #### Environment preparation ####
 
 # Reset R's brain before new analysis session started
@@ -107,6 +109,10 @@ nc <- nc[!is.na(nc$label) ,]
 rm(label) # drop spare variables to lighten your R Environment
 
 ### Using function ###
+
+# Function takes shapefile with polygons of different classes of surface (habitats,
+# crops, vegetation, etc.), and retrieves ready-for-sampling sf object. More about sf
+# (), one of the basic R spatial data format, here: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 # Specify:
 # - shapefile name (if should lie within working directory, using absolute 
@@ -217,6 +223,11 @@ save(reflectance, file = "reflectance_data")
 
 
 ### Using function ###
+
+# Function takes sf polygon object, obtained in the previous step, and retrieves data 
+# frame with brightness values for each pixel intersected with polygons, for each 
+# optical band of Sentinel-2 sensor, marked according to the label of surface class from
+# the polygons.
 
 # Specify:
 # - polygons of surface classes as a sf object, prepared on previous step;
@@ -485,6 +496,160 @@ violin.plot <- function(data){
     facet_wrap( ~ variable, ncol = 2)
 }
 
+p3 <- violin.plot(reflectance)
+
+p3
+
+p3 + 
+  labs(x='Surface class',y='Reflectance',
+       fill="Surface classes",
+       title = "Reflectance for different surface classes",
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+
+
+#### Use case 2. Habitat types of Southern Buh valley ####
+#### DO NOT RUN THIS! UNDER DEVELOPMENT #
+
+# Environment preparation
+rm(list = ls()) # Reset R's brain before new analysis session started
+
+# Load required packages
+library(tidyverse)
+library(rgee)
+library(sf)
+library(geojsonio)
+library(reshape2)
+
+# Upload and process vector data
+sf_df <- prepare.vector.data("training_polygons_shapefile.shp", "eunis_2020")
+
+sf_df <- prepare.vector.data("half_file.shp", "eunis_2020")
+
+
+st_is_valid(sf_df)
+
+st_make_valid(sf_df)
+
+install.packages("googleCloudStorageR")
+library(googleCloudStorageR)
+
+# Initialize Google Earth Engine API for current session
+ee_Initialize()
+
+ee_Initialize(gcs = TRUE)
+
+ee_Initialize(drive = TRUE)
+### Step-by-step ###
+
+ee_df <-  sf_as_ee(sf_df) # convert sf to ee featureCollection object
+
+?sf_as_ee
+?ee_as_sf
+
+# Upload small geometries to EE asset
+assetId <- sprintf("%s/%s", ee_get_assethome(), 'sf_df')
+ee_df <-  sf_as_ee(sf_df,
+                   overwrite = TRUE,
+                   assetId = assetId,
+                   via = "getInfo_to_asset")
+
+
+# create an envelope region of interest to filter image collection
+region <- ee_df$geometry()$bounds()
+
+
+# cloud mask function for Sentinel-2
+# from https://github.com/ricds/DL_RS_GEE/blob/main/rgee_data_acquisition.R
+maskS2clouds <-  function(image) {
+  qa = image$select('QA60');
+  
+  # Bits 10 and 11 are clouds and cirrus, respectively.
+  cloudBitMask = bitwShiftL(1,10)
+  cirrusBitMask = bitwShiftL(1, 11)
+  
+  # Both flags should be set to zero, indicating clear conditions.
+  mask_data = qa$bitwiseAnd(cloudBitMask)$eq(0)$And(qa$bitwiseAnd(cirrusBitMask)$eq(0));
+  
+  return(image$updateMask(mask_data)$divide(10000))
+}
+
+# Set cloud_threshold applied for individual imageries
+cloud_treshold = 10
+
+# Make median multi-band image from Sentinel L2A image collection for given
+# date range and region
+
+sentinel2A <-  ee$ImageCollection("COPERNICUS/S2_SR")$
+  filterDate("2019-05-15", "2019-06-30")$
+  filterBounds(region)$
+  filter(ee$Filter$lt('CLOUDY_PIXEL_PERCENTAGE', cloud_treshold))$
+  map(maskS2clouds)$
+  select(c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"))$
+  median()
+
+
+# This property of the table stores the land cover labels.
+label <- "class"
+
+# Overlay the polygons (or any other vector features) on the imagery to get training.
+training <- sentinel2A$sampleRegions(
+  collection = ee_df,
+  properties = list(label),
+  scale = 10
+)
+
+# Convert training to the sf object
+values <-  ee_as_sf(training,
+                    maxFeatures = 10000000000)
+
+# make a list of label values (types of surface) and its numerical IDs
+classes_cheatsheet <- as.data.frame(levels(factor(df$label)))
+classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(df$label))))
+colnames(classes_cheatsheet) <- c("label", "class")
+classes_cheatsheet <-  classes_cheatsheet %>%
+  mutate(across(label, as.factor)) %>%
+  mutate(across(class, as.numeric))
+
+# Get final dataframe with class labels and pixel values
+reflectance <-  values %>%
+  left_join(classes_cheatsheet, by="class") %>%
+  st_drop_geometry() %>%
+  select(-class)
+
+
+
+
+
+# Obtain pixel values from Sentinel 2A image collection
+reflectance = get.pixel.data(sf_df, "2019-05-15", "2019-06-30", 10, 20)
+
+# Spectral reflectance curves
+p1 <- spectral.curves.plot(reflectance)
+
+p1
+
+p1+
+  labs(x = 'Wavelength, nm', y = 'Reflectance',
+       colour = "Surface classes",
+       fill = "Surface classes",
+       title = "Spectral reflectance curves for different classes of surface",
+       caption = 'Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+
+# Statistical summary plot
+p2 <- stat.summary.plot(reflectance)
+
+p2
+
+p2 + 
+  labs(x = 'Sentinel-2 bands', y = 'Reflectance',
+       colour = "Surface classes",
+       title = "Reflectance for different surface classes",
+       caption='Data: Sentinel-2 Level-2A\nmean ± standard deviation')+
+  theme_minimal()
+
+# Violin plots
 p3 <- violin.plot(reflectance)
 
 p3
