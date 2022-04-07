@@ -310,8 +310,8 @@ get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_val
                       maxFeatures = 10000000000)
   
   # make a list of label values (types of surface) and its numerical IDs
-  classes_cheatsheet <- as.data.frame(levels(factor(df$label)))
-  classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(df$label))))
+  classes_cheatsheet <- as.data.frame(levels(factor(sf_df$label)))
+  classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(sf_df$label))))
   colnames(classes_cheatsheet) <- c("label", "class")
   classes_cheatsheet <-  classes_cheatsheet %>%
     mutate(across(label, as.factor)) %>%
@@ -509,7 +509,10 @@ p3 +
 
 
 #### Use case 2. Habitat types of Southern Buh valley ####
+
 #### DO NOT RUN THIS! UNDER DEVELOPMENT #
+
+# For large data (vector file larger than 1 MB, more than 1500 pixel values to get.
 
 # Environment preparation
 rm(list = ls()) # Reset R's brain before new analysis session started
@@ -521,38 +524,32 @@ library(sf)
 library(geojsonio)
 library(reshape2)
 
+# You may define all the custom function mentioned above before proceeding.
+
 # Upload and process vector data
-sf_df <- prepare.vector.data("training_polygons_shapefile.shp", "eunis_2020")
+
+# sf_df <- prepare.vector.data("training_polygons_shapefile.shp", "eunis_2020")
+# EEException: Invalid GeoJSON geometry.
 
 sf_df <- prepare.vector.data("half_file.shp", "eunis_2020")
 
+# st_is_valid(sf_df) # check polygon's validity
 
-st_is_valid(sf_df)
-
-st_make_valid(sf_df)
-
-install.packages("googleCloudStorageR")
-library(googleCloudStorageR)
+# st_make_valid(sf_df) # fix invalid polygons if any
 
 # Initialize Google Earth Engine API for current session
-ee_Initialize()
+ee_Initialize(user = 'ndef', drive = TRUE)
 
-ee_Initialize(gcs = TRUE)
-
-ee_Initialize(drive = TRUE)
 ### Step-by-step ###
 
 ee_df <-  sf_as_ee(sf_df) # convert sf to ee featureCollection object
 
-?sf_as_ee
-?ee_as_sf
-
 # Upload small geometries to EE asset
-assetId <- sprintf("%s/%s", ee_get_assethome(), 'sf_df')
-ee_df <-  sf_as_ee(sf_df,
-                   overwrite = TRUE,
-                   assetId = assetId,
-                   via = "getInfo_to_asset")
+#assetId <- sprintf("%s/%s", ee_get_assethome(), 'sf_df')
+#ee_df <-  sf_as_ee(sf_df,
+#                   overwrite = TRUE,
+#                   assetId = assetId,
+#                   via = "getInfo_to_asset")
 
 
 # create an envelope region of interest to filter image collection
@@ -599,13 +596,40 @@ training <- sentinel2A$sampleRegions(
   scale = 10
 )
 
-# Convert training to the sf object
-values <-  ee_as_sf(training,
-                    maxFeatures = 10000000000)
+
+# calculate total area of polygons
+sf_df$area <- st_area(sf_df)
+rowsum(sf_df$area)
+
+
+library(raster)
+area(sf_df)
+
+# find expected number of pixels to get sampled (rows in resulting dataframe)
+
+
+
+
+# Convert training to the sf object (with saving via google drive)
+values <- ee_as_sf(
+  training,
+  overwrite = TRUE,
+  via = "drive",
+  container = "rgee_backup",
+  crs = NULL,
+  maxFeatures = 10000000000,
+  selectors = NULL,
+  lazy = FALSE,
+  public = TRUE,
+  add_metadata = TRUE,
+  timePrefix = TRUE,
+  quiet = FALSE
+)
+
 
 # make a list of label values (types of surface) and its numerical IDs
-classes_cheatsheet <- as.data.frame(levels(factor(df$label)))
-classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(df$label))))
+classes_cheatsheet <- as.data.frame(levels(factor(sf_df$label)))
+classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(sf_df$label))))
 colnames(classes_cheatsheet) <- c("label", "class")
 classes_cheatsheet <-  classes_cheatsheet %>%
   mutate(across(label, as.factor)) %>%

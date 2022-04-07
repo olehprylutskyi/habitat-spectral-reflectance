@@ -1,76 +1,12 @@
-Error in ee_connect_to_py(path = ee_current_version, n = 5) :
-  The current Python PATH: /home/oleh/.virtualenvs/rgee/bin/python
-does not have the Python package "earthengine-api" installed. Are you restarted/terminated.
-your R session after install miniconda or run ee_install()?
-If no do it, please try again:
-> ee_install(): To create and set a Python environment with all rgee dependencies.
-> ee_install_set_pyenv(): To set a specific Python environment.
-
-ee_install()
+rgee uses earthengine_api package, which depends on Python. That's why we need to setting up local PYthon environment for using rgee.
 
 
 
-R version 4.1.3 (2022-03-10) -- "One Push-Up"
-Copyright (C) 2022 The R Foundation for Statistical Computing
-Platform: x86_64-pc-linux-gnu (64-bit)
 
-R is free software and comes with ABSOLUTELY NO WARRANTY.
-You are welcome to redistribute it under certain conditions.
-Type 'license()' or 'licence()' for distribution details.
-
-  Natural language support but running in an English locale
-
-R is a collaborative project with many contributors.
-Type 'contributors()' for more information and
-'citation()' on how to cite R or R packages in publications.
-
-Type 'demo()' for some demos, 'help()' for on-line help, or
-'help.start()' for an HTML browser interface to help.
-Type 'q()' to quit R.
-
-> # Reset R's brain before new analysis session started
-> rm(list = ls())
-> # Load required packages
-> library(tidyverse)
-── Attaching packages ──────────────────────────────────────────────────────────────────────────── tidyverse 1.3.1 ──
-✓ ggplot2 3.3.5     ✓ purrr   0.3.4
-✓ tibble  3.1.6     ✓ dplyr   1.0.8
-✓ tidyr   1.2.0     ✓ stringr 1.4.0
-✓ readr   2.1.2     ✓ forcats 0.5.1
-── Conflicts ─────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
-x dplyr::filter() masks stats::filter()
-x dplyr::lag()    masks stats::lag()
-> library(rgee)
-> library(sf)
-Linking to GEOS 3.9.0, GDAL 3.2.2, PROJ 7.2.1; sf_use_s2() is TRUE
-> library(geojsonio)
-Registered S3 method overwritten by 'geojsonsf':
-  method        from
-  print.geojson geojson
-
-Attaching package: ‘geojsonio’
-
-The following object is masked from ‘package:base’:
-
-    pretty
-
-Warning message:
-In fun(libname, pkgname) :
-  rgeos: versions of GEOS runtime 3.9.0-CAPI-1.16.2
-and GEOS at installation 3.8.0-CAPI-1.13.1differ
-> library(reshape2)
-
-Attaching package: ‘reshape2’
-
-The following object is masked from ‘package:tidyr’:
-
-    smiths
-
-
-> # Upload and process vector data
-> sf_df <- prepare.vector.data("training_polygons_shapefile.shp", "eunis_2020")
 > # Initialize Google Earth Engine API for current session
 > ee_Initialize()
+
+
 Error in ee_connect_to_py(path = ee_current_version, n = 5) :
   The current Python PATH: /home/oleh/.virtualenvs/rgee/bin/python
 does not have the Python package "earthengine-api" installed. Are you restarted/terminated.
@@ -136,3 +72,37 @@ Do you want restart your R session?
 
 1: yes
 2: no
+
+After restarting R session your should recall rgee library and check installation status manually
+
+library(rgee)
+
+ee_check()
+
+◉  Python version
+✓ [Ok] /home/oleh/.virtualenvs/rgee/bin/python v3.8
+◉  Python packages:
+✓ [Ok] numpy
+✓ [Ok] earthengine-api
+NOTE: The Earth Engine Python API version 0.1.304 is installed
+correctly in the system but rgee was tested using the version
+0.1.299. To avoid possible issues, we recommend install the
+version used by rgee (0.1.299). You might use:
+* rgee::ee_install_upgrade()
+* reticulate::py_install('earthengine-api==0.1.299', envname='PUT_HERE_YOUR_PYENV')
+* pip install earthengine-api==0.1.299 (Linux and Mac0S)
+* conda install earthengine-api==0.1.299 (Linux, Mac0S, and Windows)
+
+
+ee_install_upgrade()
+
+Previous command upgrade (or even downgrade, for me at least) your earthengine_api to the most tested and supported version. That's odd, isn't it?
+
+After that, when you execute the command
+
+ee_Initialize()
+
+you will be re-directered to web browser for logging into your Google Earth Engine account and confirm access rights.
+An authorization code generated during this step should be pasted into R console to finalize authentification.
+
+Unfortantly, you have to repeat environment setting and re-authorization each time Python gets updates. For actively updated systems, like regular versions of Ubuntu linux, it is quite annoynig. On the other hand, this built-in reparing system protects you from accidentally breaking eartengine Python environment during installation or using any other Python-related tools, which is convenient at least if you are such a dummy Python user as me.
