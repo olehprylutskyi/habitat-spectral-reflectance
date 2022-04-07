@@ -598,17 +598,33 @@ training <- sentinel2A$sampleRegions(
 
 
 # calculate total area of polygons
+?st_area
+
 sf_df$area <- st_area(sf_df)
 rowsum(sf_df$area)
 
+sum(st_area(sf_df))
 
-library(raster)
-area(sf_df)
+scale_value = 10
+
+ifelse(as.numeric(sum(st_area(sf_df) / scale_value^2)) < 15000, "getInfo", "drive")
+
+if (as.numeric(sum(st_area(sf_df) / scale_value^2)) < 15000){
+  print('getInfo')
+} else {
+  print('drive')
+}
+
+
 
 # find expected number of pixels to get sampled (rows in resulting dataframe)
 
 
+values <-  ee_as_sf(training,
+                    maxFeatures = 10000000000)
 
+
+training$size
 
 # Convert training to the sf object (with saving via google drive)
 values <- ee_as_sf(
