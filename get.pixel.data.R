@@ -85,8 +85,3 @@ get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_val
     st_drop_geometry() %>%
     select(-class)
 }
-
-
-reflectance = get.pixel.data(sf_df, "2019-05-15", "2019-06-30", 10, 100)
-
-save(reflectance, file = "reflectance_data") # save pixel data for further sessions
