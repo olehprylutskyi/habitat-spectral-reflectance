@@ -1,4 +1,5 @@
 get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_value){
+  ee_Initialize()
   ee_df <-  sf_as_ee(sf_data) # convert sf to ee featureCollection object
 
   # create an envelope region of interest to filter image collection
@@ -49,26 +50,26 @@ get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_val
   # value (pixel size).
 
   if(as.numeric(sum(st_area(sf_data) / scale_value^2)) < 15000){
-  # Convert training to the sf object directly
-  values <-  ee_as_sf(training,
-                      maxFeatures = 10000000000)
+    # Convert training to the sf object directly
+    values <-  ee_as_sf(training,
+                        maxFeatures = 10000000000)
   } else {
-  # Initialize Google Earth Engine API for using Google Drive as a container
-  ee_Initialize(user = 'ndef', drive = TRUE)
-  # Convert training to the sf object (with saving via google drive)
-  values <- ee_as_sf(training,
-  overwrite = TRUE,
-  via = "drive",
-  container = "rgee_backup",
-  crs = NULL,
-  maxFeatures = 10000000000,
-  selectors = NULL,
-  lazy = FALSE,
-  public = TRUE,
-  add_metadata = TRUE,
-  timePrefix = TRUE,
-  quiet = FALSE
-)
+    # Initialize Google Earth Engine API for using Google Drive as a container
+    ee_Initialize(user = 'ndef', drive = TRUE)
+    # Convert training to the sf object (with saving via google drive)
+    values <- ee_as_sf(training,
+                       overwrite = TRUE,
+                       via = "drive",
+                       container = "rgee_backup",
+                       crs = NULL,
+                       maxFeatures = 10000000000,
+                       selectors = NULL,
+                       lazy = FALSE,
+                       public = TRUE,
+                       add_metadata = TRUE,
+                       timePrefix = TRUE,
+                       quiet = FALSE
+    )
   }
 
   # make a list of label values (types of surface) and its numerical IDs

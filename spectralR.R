@@ -143,6 +143,7 @@ prepare.vector.data <- function(shapefile_name, label_field){
   nc$class <- as.numeric(nc$class)
   # delete objects with NA in the target variable
   nc <- nc[!is.na(nc$label) ,]
+  nc <- st_make_valid(nc) # fix invalid polygons if any
 }
 
 
@@ -264,6 +265,7 @@ save(reflectance, file = "reflectance_data")
 
 
 get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_value){
+  ee_Initialize()
   ee_df <-  sf_as_ee(sf_data) # convert sf to ee featureCollection object
   
   # create an envelope region of interest to filter image collection
@@ -305,9 +307,36 @@ get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_val
     scale = scale_value
   )
   
-  # Convert training to the sf object
-  values <-  ee_as_sf(training,
-                      maxFeatures = 10000000000)
+  # rgee uses three different approach to upload and download data from and to the server. For small
+  # dataset () default value "getInfo" is recommended, while for large vector objects / outputs
+  # using intermediate container (Google Drive or Google Cloud Storage) is required. We tested
+  # Google Drive approach and it showed good performance with downloading of ca. 90K pixel values.
+  # function "get.pixel.data" estimates the size of input data / GEE object to be downloaded, and then
+  # pick more appropriate method on their own, based on both total area of vector polygons and user defined scale
+  # value (pixel size).
+  
+  if(as.numeric(sum(st_area(sf_data) / scale_value^2)) < 15000){
+    # Convert training to the sf object directly
+    values <-  ee_as_sf(training,
+                        maxFeatures = 10000000000)
+  } else {
+    # Initialize Google Earth Engine API for using Google Drive as a container
+    ee_Initialize(user = 'ndef', drive = TRUE)
+    # Convert training to the sf object (with saving via google drive)
+    values <- ee_as_sf(training,
+                       overwrite = TRUE,
+                       via = "drive",
+                       container = "rgee_backup",
+                       crs = NULL,
+                       maxFeatures = 10000000000,
+                       selectors = NULL,
+                       lazy = FALSE,
+                       public = TRUE,
+                       add_metadata = TRUE,
+                       timePrefix = TRUE,
+                       quiet = FALSE
+    )
+  }
   
   # make a list of label values (types of surface) and its numerical IDs
   classes_cheatsheet <- as.data.frame(levels(factor(sf_df$label)))
@@ -323,7 +352,6 @@ get.pixel.data <- function(sf_data, startday, endday, cloud_threshold, scale_val
     st_drop_geometry() %>%
     select(-class)
 }
-
 
 reflectance = get.pixel.data(sf_df, "2019-05-15", "2019-06-30", 10, 100)
 
@@ -510,12 +538,6 @@ p3 +
 
 #### Use case 2. Habitat types of Southern Buh valley ####
 
-#### DO NOT RUN THIS! UNDER DEVELOPMENT #
-
-# Step-by-step
-
-# For large data (vector file larger than 1 MB, more than 1500 pixel values to get.
-
 # Environment preparation
 rm(list = ls()) # Reset R's brain before new analysis session started
 
@@ -526,236 +548,14 @@ library(sf)
 library(geojsonio)
 library(reshape2)
 
-# You may define all the custom function mentioned above before proceeding.
+# You may manually define all the custom function mentioned above before proceeding.
 
 # Upload and process vector data
-
-# sf_df <- prepare.vector.data("training_polygons_shapefile.shp", "eunis_2020")
-# EEException: Invalid GeoJSON geometry.
-
-sf_df <- prepare.vector.data("half_file.shp", "eunis_2020")
-
-# st_is_valid(sf_df) # check polygon's validity
-
-# st_make_valid(sf_df) # fix invalid polygons if any
-
-# Initialize Google Earth Engine API for current session
-ee_Initialize(user = 'ndef', drive = TRUE)
-
-### Step-by-step ###
-
-ee_df <-  sf_as_ee(sf_df) # convert sf to ee featureCollection object
-
-# Upload small geometries to EE asset
-#assetId <- sprintf("%s/%s", ee_get_assethome(), 'sf_df')
-#ee_df <-  sf_as_ee(sf_df,
-#                   overwrite = TRUE,
-#                   assetId = assetId,
-#                   via = "getInfo_to_asset")
-
-
-# create an envelope region of interest to filter image collection
-region <- ee_df$geometry()$bounds()
-
-
-# cloud mask function for Sentinel-2
-# from https://github.com/ricds/DL_RS_GEE/blob/main/rgee_data_acquisition.R
-maskS2clouds <-  function(image) {
-  qa = image$select('QA60');
-  
-  # Bits 10 and 11 are clouds and cirrus, respectively.
-  cloudBitMask = bitwShiftL(1,10)
-  cirrusBitMask = bitwShiftL(1, 11)
-  
-  # Both flags should be set to zero, indicating clear conditions.
-  mask_data = qa$bitwiseAnd(cloudBitMask)$eq(0)$And(qa$bitwiseAnd(cirrusBitMask)$eq(0));
-  
-  return(image$updateMask(mask_data)$divide(10000))
-}
-
-# Set cloud_threshold applied for individual imageries
-cloud_treshold = 10
-
-# Make median multi-band image from Sentinel L2A image collection for given
-# date range and region
-
-sentinel2A <-  ee$ImageCollection("COPERNICUS/S2_SR")$
-  filterDate("2019-05-15", "2019-06-30")$
-  filterBounds(region)$
-  filter(ee$Filter$lt('CLOUDY_PIXEL_PERCENTAGE', cloud_treshold))$
-  map(maskS2clouds)$
-  select(c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"))$
-  median()
-
-
-# This property of the table stores the land cover labels.
-label <- "class"
-
-# Overlay the polygons (or any other vector features) on the imagery to get training.
-training <- sentinel2A$sampleRegions(
-  collection = ee_df,
-  properties = list(label),
-  scale = 10
-)
-
-
-# calculate total area of polygons
-?st_area
-
-sf_df$area <- st_area(sf_df)
-rowsum(sf_df$area)
-
-sum(st_area(sf_df))
-
-scale_value = 10
-
-ifelse(as.numeric(sum(st_area(sf_df) / scale_value^2)) < 15000, "getInfo", "drive")
-
-if (as.numeric(sum(st_area(sf_df) / scale_value^2)) < 15000){
-  print('getInfo')
-} else {
-  print('drive')
-}
-
-
-
-# find expected number of pixels to get sampled (rows in resulting dataframe)
-
-
-values <-  ee_as_sf(training,
-                    maxFeatures = 10000000000)
-
-
-training$size
-
-# Convert training to the sf object (with saving via google drive)
-values <- ee_as_sf(
-  training,
-  overwrite = TRUE,
-  via = "drive",
-  container = "rgee_backup",
-  crs = NULL,
-  maxFeatures = 10000000000,
-  selectors = NULL,
-  lazy = FALSE,
-  public = TRUE,
-  add_metadata = TRUE,
-  timePrefix = TRUE,
-  quiet = FALSE
-)
-
-
-# make a list of label values (types of surface) and its numerical IDs
-classes_cheatsheet <- as.data.frame(levels(factor(sf_df$label)))
-classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(sf_df$label))))
-colnames(classes_cheatsheet) <- c("label", "class")
-classes_cheatsheet <-  classes_cheatsheet %>%
-  mutate(across(label, as.factor)) %>%
-  mutate(across(class, as.numeric))
-
-# Get final dataframe with class labels and pixel values
-reflectance <-  values %>%
-  left_join(classes_cheatsheet, by="class") %>%
-  st_drop_geometry() %>%
-  select(-class)
-
-
-
-# Using function
-
-
-
-
-get.pixel.data2 <- function(sf_data, startday, endday, cloud_threshold, scale_value){
-  ee_df <-  sf_as_ee(sf_data) # convert sf to ee featureCollection object
-  
-  # create an envelope region of interest to filter image collection
-  region <- ee_df$geometry()$bounds()
-  
-  # cloud mask function for Sentinel-2
-  # from https://github.com/ricds/DL_RS_GEE/blob/main/rgee_data_acquisition.R
-  maskS2clouds <-  function(image) {
-    qa = image$select('QA60');
-    
-    # Bits 10 and 11 are clouds and cirrus, respectively.
-    cloudBitMask = bitwShiftL(1,10)
-    cirrusBitMask = bitwShiftL(1, 11)
-    
-    # Both flags should be set to zero, indicating clear conditions.
-    mask_data = qa$bitwiseAnd(cloudBitMask)$eq(0)$And(qa$bitwiseAnd(cirrusBitMask)$eq(0));
-    
-    return(image$updateMask(mask_data)$divide(10000))
-  }
-  
-  # Make median multi-band image from Sentinel L2A image collection for given
-  # date range and region
-  
-  sentinel2A <-  ee$ImageCollection("COPERNICUS/S2_SR")$
-    filterDate(startday, endday)$
-    filterBounds(region)$
-    filter(ee$Filter$lt('CLOUDY_PIXEL_PERCENTAGE', cloud_threshold))$
-    map(maskS2clouds)$
-    select(c("B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"))$
-    median()
-  
-  # This property of the table stores the land cover labels.
-  label <- "class"
-  
-  # Overlay the polygons (or any other vector features) on the imagery to get training.
-  training <- sentinel2A$sampleRegions(
-    collection = ee_df,
-    properties = list(label),
-    scale = scale_value
-  )
-  
-  # rgee uses three different approach to upload and download data from and to the server. For small
-  # dataset () default value "getInfo" is recommended, while for large vector objects / outputs
-  # using intermediate container (Google Drive or Google Cloud Storage) is required. We tested
-  # Google Drive approach and it showed good performance with downloading of ca. 90K pixel values.
-  # function "get.pixel.data" estimates the size of input data / GEE object to be downloaded, and then
-  # pick more appropriate method on their own, based on both total area of vector polygons and user defined scale
-  # value (pixel size).
-  
-  if(as.numeric(sum(st_area(sf_data) / scale_value^2)) < 15000){
-    # Convert training to the sf object directly
-    values <-  ee_as_sf(training,
-                        maxFeatures = 10000000000)
-  } else {
-    # Initialize Google Earth Engine API for using Google Drive as a container
-    ee_Initialize(user = 'ndef', drive = TRUE)
-    # Convert training to the sf object (with saving via google drive)
-    values <- ee_as_sf(training,
-                       overwrite = TRUE,
-                       via = "drive",
-                       container = "rgee_backup",
-                       crs = NULL,
-                       maxFeatures = 10000000000,
-                       selectors = NULL,
-                       lazy = FALSE,
-                       public = TRUE,
-                       add_metadata = TRUE,
-                       timePrefix = TRUE,
-                       quiet = FALSE
-    )
-  }
-  
-  # make a list of label values (types of surface) and its numerical IDs
-  classes_cheatsheet <- as.data.frame(levels(factor(sf_df$label)))
-  classes_cheatsheet$class <- rownames(as.data.frame(levels(factor(sf_df$label))))
-  colnames(classes_cheatsheet) <- c("label", "class")
-  classes_cheatsheet <-  classes_cheatsheet %>%
-    mutate(across(label, as.factor)) %>%
-    mutate(across(class, as.numeric))
-  
-  # Get final dataframe with class labels and pixel values
-  reflectance <-  values %>%
-    left_join(classes_cheatsheet, by="class") %>%
-    st_drop_geometry() %>%
-    select(-class)
-}
+sf_df <- prepare.vector.data("SouthernBuh-habitats_shapefile.shp", "eunis_2020")
 
 # Obtain pixel values from Sentinel 2A image collection
-reflectance = get.pixel.data(sf_df, "2019-05-15", "2019-06-30", 10, 20)
+reflectance = get.pixel.data2(sf_df, "2019-05-15", "2019-06-30", 10, 10)
+
 
 # Spectral reflectance curves
 p1 <- spectral.curves.plot(reflectance)
@@ -809,10 +609,46 @@ reflectance = get.pixel.data2(sf_df, "2019-05-15", "2019-06-30", 10, 10)
 save(reflectance, file = "reflectance_data") # save pixel data for further sessions
 
 
-#### Making spectral reflectance curves ####
+#### Making spectral reflectance curves 
+
+# Quantitative overview of pixel data
+load(file = "./reflectance_data") # restore prevoiusly saved pixel data
+
+summary(factor(reflectance$label)) # how many pixels in each class? 
+
+p1 <- spectral.curves.plot(reflectance)
+
+p1
+
+p1+
+  labs(x = 'Wavelength, nm', y = 'Reflectance',
+       colour = "Habitat types",
+       fill = "Habitat types",
+       title = "Spectral reflectance curves for different habitat types\nSouthern Buh National park, Ukraine",
+       caption = 'Data: Sentinel-2 Level-2A')+
+  theme_minimal()
+
+p2 <- stat.summary.plot(reflectance)
+
+p2
+
+p2 + 
+  labs(x = 'Sentinel-2 bands', y = 'Reflectance',
+       colour = "Habitat types",
+       title = "Reflectance for different habitat types\nSouthern Buh National park, Ukraine",
+       caption='Data: Sentinel-2 Level-2A\nmean ± standard deviation')+
+  theme_minimal()
+
+p3 <- violin.plot(reflectance)
+
+p3
+
+p3 + 
+  labs(x='Habitat type', y='Reflectance',
+       fill="Habitat types",
+       title = "Reflectance for different habitat types\nSouthern Buh National park, Ukraine",
+       caption='Data: Sentinel-2 Level-2A')+
+  theme_minimal()
 
 
-
-
-
-#### The end ####
+#### End of script ####
