@@ -111,11 +111,10 @@ rm(label) # drop spare variables to lighten your R Environment
 ### Using function ###
 
 # Function takes shapefile with polygons of different classes of surface (habitats,
-# crops, vegetation, etc.), and retrieves ready-for-sampling sf object. More about sf
-# (), one of the basic R spatial data format, here: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# crops, vegetation, etc.), and retrieves ready-for-sampling sf object.
 
 # Specify:
-# - shapefile name (if should lie within working directory, using absolute 
+# - shapefile name (should lie within working directory, using absolute
 # paths were not tested)
 # - name of the field which contains class labels
 
