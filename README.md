@@ -1,5 +1,7 @@
 # Spectral reflectance of habitat types: case study on Southern Bug valley, Ukraine
 
+This bunch of scripts are deprecated. Use instead our integrated R package [spectralR](https://github.com/olehprylutskyi/spectralR), which does the same, but avoid downloading large files to the local machine, as well as using multiple tools.
+
 ## Description
 Scripts for Google Eart Engine (javascript) and R (as RMarkdown) for obtaining and visualizing satellite derived spectral reflectance data for predefined polygons (habitat types in this case).
 
