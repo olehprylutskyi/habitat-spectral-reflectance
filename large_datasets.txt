@@ -1,4 +1,0 @@
-
-
-
-Obvoiusly you have to get enough storage on your Google Drive, as well as clean "rgee_backup" directory manually to avoid lack of free space.
