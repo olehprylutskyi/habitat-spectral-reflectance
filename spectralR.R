@@ -486,11 +486,11 @@ p2 +
   theme_minimal()
 
 
-# Reflectance per bands on high classification level
+# Reflectance per bands as violin plots for each surface class
 
 # Function takes reflectance data as an input and retrieve ggplot object, which can be 
 # visualized directly or customized using ggplot functionality. Default aesthetics is 
-# violin plot for each satellite band (geom_violin),
+# violin plot for each satellite band (geom_violin).
 # See https://ggplot2.tidyverse.org/reference/geom_violin.html for more details.
 
 # Specify:
@@ -548,52 +548,6 @@ library(geojsonio)
 library(reshape2)
 
 # You may manually define all the custom function mentioned above before proceeding.
-
-# Upload and process vector data
-sf_df <- prepare.vector.data("SouthernBuh-habitats_shapefile.shp", "eunis_2020")
-
-# Obtain pixel values from Sentinel 2A image collection
-reflectance = get.pixel.data2(sf_df, "2019-05-15", "2019-06-30", 10, 10)
-
-
-# Spectral reflectance curves
-p1 <- spectral.curves.plot(reflectance)
-
-p1
-
-p1+
-  labs(x = 'Wavelength, nm', y = 'Reflectance',
-       colour = "Surface classes",
-       fill = "Surface classes",
-       title = "Spectral reflectance curves for different classes of surface",
-       caption = 'Data: Sentinel-2 Level-2A')+
-  theme_minimal()
-
-# Statistical summary plot
-p2 <- stat.summary.plot(reflectance)
-
-p2
-
-p2 + 
-  labs(x = 'Sentinel-2 bands', y = 'Reflectance',
-       colour = "Surface classes",
-       title = "Reflectance for different surface classes",
-       caption='Data: Sentinel-2 Level-2A\nmean ± standard deviation')+
-  theme_minimal()
-
-# Violin plots
-p3 <- violin.plot(reflectance)
-
-p3
-
-p3 + 
-  labs(x='Surface class',y='Reflectance',
-       fill="Surface classes",
-       title = "Reflectance for different surface classes",
-       caption='Data: Sentinel-2 Level-2A')+
-  theme_minimal()
-
-
 
 # Upload and process vector data
 
